@@ -1,0 +1,69 @@
+-- SQLBook: Code
+/* Задание 4 
+Клиентами являются компании из разных отраслей. Каждая из компаний может 
+самостоятельно создавать различные кампании (виджеты) с разным описанием и разным 
+набором настроек. Пользователи, совершающие пожертвования, всегда делают это в одну 
+из таких кампаний, а не в компанию в целом. Таким образом, каждый донат “прикреплен” в 
+какой-то определенной кампании (виджету), которая, в свою очередь, принадлежит какой-
+то определенной компании. 
+
+В БД есть 3 таблицы: 
+1) Таблица charges, содержащая донаты пользователей:
+
+Event_date ClientID AmountInUSD Campaign_key
+
+2022-01-01 1234567 100.00 ABCDEF
+
+2) Таблица widgets, содержащая информацию о кампаниях (виджетах):
+
+Campaign_key Campaign_name Company_key Company_name
+
+ABCDEF       My_campaign   GHIJKLM     My_company
+
+3) Таблица websites_events, содержащая логи пользователей:
+
+EventTime           EventType ClientID ...
+
+2022-01-01 12:05:05 PageView  1234567 ...
+
+Нужно написать SQL запрос, который для каждого campaign_name выводит Event_date и 
+ClientID пользователя, совершившего максимальный донат (по полю AmountInUSD), и 
+соответствует следующим критериям: 
+- Не выводит виджеты, которые принадлежат компании ‘My_company’ 
+- Не учитывает пользователей, которые в день совершения доната совершали событие c 
+EventType = ‘elementView’
+*/
+-- SQLBook: Code
+create table charges (Event_date date, ClientID int, AmountInUSD numeric(20, 2), campaign_key VARCHAR(50));
+insert into charges values ('2022-01-01', 1234567, '100.00', 'ABCDEF');
+insert into charges values ('2022-01-02', 12345678, '100.00', 'ABCDEF1');
+insert into charges values ('2022-01-03', 123456789, '159.00', 'ABCDEF1');
+insert into charges values ('2022-01-04', 1111, '200.00', 'ABCDEF');
+insert into charges values ('2022-01-05', 2222, '300.00', 'ABCDEF');
+insert into charges values ('2022-01-05', 2222, '300.00', 'ABCDEF3');
+-- SQLBook: Code
+create table widgets (Campaign_key VARCHAR(50), Campaign_name VARCHAR(50), Company_key VARCHAR(50), Company_name VARCHAR(50));
+insert into widgets values ('ABCDEF', 'My_campaign', 'GHIJKLM', 'My_company');
+insert into widgets values ('ABCDEF', 'My_campaign', 'GHIJKLM', 'My_company1');
+insert into widgets values ('ABCDEF1', 'My_campaign1', 'GHIJKLM1', 'My_company1');
+insert into widgets values ('ABCDEF1', 'My_campaign1', 'GHIJKLM2', 'My_company2');
+insert into widgets values ('ABCDEF3', 'My_campaign3', 'GHIJKLM', 'My_company');
+insert into widgets values ('ABCDEF4', 'My_campaign4', 'GHIJKLM4', 'My_company4');
+-- SQLBook: Code
+create table websites_events (EventTime TIMESTAMP, EventType VARCHAR(50), ClientID int);
+insert into websites_events values ('2022-01-01 12:05:05', 'PageView', 1234567);
+insert into websites_events values ('2022-01-01 12:05:05', 'elementView', 1234567);
+-- SQLBook: Code
+select distinct
+       w.campaign_name
+     , first_value(c.event_date) over (partition by w.campaign_name order by c.amountinusd desc, c.clientid descb) as event_date
+     , first_value(c.clientid) over (partition by w.campaign_name order by c.amountinusd desc, c.clientid desc) as clientid
+  from widgets w
+   left join charges c -- left join чтобы показать, что донатов не было
+    on w.campaign_key = c.campaign_key
+   left join websites_events e -- считаем, что требуется исключить донат пользователя, совершенный в один день с событием elementView, а не исключить пользователя совсем
+    on c.clientid = e.clientid
+   and c.event_date = cast(e.eventtime as date)
+   and e.eventtype = 'elementView'
+ where e.clientid is null
+   and (w.company_name <> 'My_company' or w.company_name is null)
