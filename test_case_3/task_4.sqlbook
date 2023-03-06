@@ -54,16 +54,22 @@ create table websites_events (EventTime TIMESTAMP, EventType VARCHAR(50), Client
 insert into websites_events values ('2022-01-01 12:05:05', 'PageView', 1234567);
 insert into websites_events values ('2022-01-01 12:05:05', 'elementView', 1234567);
 -- SQLBook: Code
+with elementview as (
+  select distinct 
+         clientid
+       , cast(eventtime as date) as event_date 
+    from websites_events
+   where eventtype = 'elementView')
+   
 select distinct
        w.campaign_name
-     , first_value(c.event_date) over (partition by w.campaign_name order by c.amountinusd desc, c.clientid descb) as event_date
+     , first_value(c.event_date) over (partition by w.campaign_name order by c.amountinusd desc, c.clientid desc) as event_date
      , first_value(c.clientid) over (partition by w.campaign_name order by c.amountinusd desc, c.clientid desc) as clientid
   from widgets w
    left join charges c -- left join чтобы показать, что донатов не было
     on w.campaign_key = c.campaign_key
-   left join websites_events e -- считаем, что требуется исключить донат пользователя, совершенный в один день с событием elementView, а не исключить пользователя совсем
+   left join elementview e -- считаем, что требуется исключить донат пользователя, совершенный в один день с событием elementView, а не исключить пользователя совсем
     on c.clientid = e.clientid
-   and c.event_date = cast(e.eventtime as date)
-   and e.eventtype = 'elementView'
+   and c.event_date = e.event_date
  where e.clientid is null
    and (w.company_name <> 'My_company' or w.company_name is null)
